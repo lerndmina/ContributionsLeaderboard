@@ -1,0 +1,40 @@
+.contributionsleaderboard {
+  width: 100%;
+  margin: 1em 0;
+}
+
+.contributionsleaderboard th {
+  background-color: #f8f9fa;
+  text-align: left;
+  padding: 0.5em;
+}
+
+.contributionsleaderboard td {
+  padding: 0.5em;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.contributionsleaderboard-pagination {
+  margin: 1em 0;
+  text-align: center;
+}
+
+.contributionsleaderboard-pagination a,
+.contributionsleaderboard-pagination span {
+  padding: 0.5em 1em;
+  margin: 0 0.25em;
+  border: 1px solid #a2a9b1;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.contributionsleaderboard-pagination a:hover {
+  background-color: #f8f9fa;
+  text-decoration: none;
+}
+
+.contributionsleaderboard-pagination .mw-disabled {
+  color: #72777d;
+  border-color: #c8ccd1;
+  cursor: default;
+}

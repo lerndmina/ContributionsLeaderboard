@@ -1,0 +1,39 @@
+{
+  "name": "ContributionsLeaderboard",
+  "version": "1.0.0",
+  "author": ["Lerndmina"],
+  "url": "https://github.com/lerndmina/ContributionsLeaderboard",
+  "description": "Displays a leaderboard of wiki contributors based on edit counts",
+  "descriptionmsg": "contributionsleaderboard-desc",
+  "license-name": "MIT",
+  "type": "specialpage",
+  "requires": {
+    "MediaWiki": ">= 1.35.0"
+  },
+  "AutoloadClasses": {
+    "SpecialContributionsLeaderboard": "includes/SpecialContributionsLeaderboard.php",
+    "ContributionsLeaderboardHooks": "includes/ContributionsLeaderboardHooks.php"
+  },
+  "MessagesDirs": {
+    "ContributionsLeaderboard": ["i18n"]
+  },
+  "ExtensionMessagesFiles": {
+    "ContributionsLeaderboardAlias": "ContributionsLeaderboard.alias.php"
+  },
+  "SpecialPages": {
+    "ContributionsLeaderboard": "SpecialContributionsLeaderboard"
+  },
+  "ResourceModules": {
+    "ext.contributionsLeaderboard": {
+      "styles": "resources/ext.contributionsLeaderboard.css"
+    }
+  },
+  "ResourceFileModulePaths": {
+    "localBasePath": "",
+    "remoteExtPath": "ContributionsLeaderboard"
+  },
+  "Hooks": {
+    "LoadExtensionSchemaUpdates": "ContributionsLeaderboardHooks::onLoadExtensionSchemaUpdates"
+  },
+  "manifest_version": 2
+}

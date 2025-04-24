@@ -1,0 +1,28 @@
+{
+  "@metadata": {
+    "authors": ["Lerndmina"]
+  },
+  "contributionsleaderboard": "Contributions Leaderboard",
+  "contributionsleaderboard-desc": "Displays a leaderboard of wiki contributors based on edit counts",
+  "contributionsleaderboard-title": "Contributions Leaderboard",
+  "contributionsleaderboard-intro": "This page shows the most active contributors to the wiki based on edit counts.",
+  "contributionsleaderboard-exclude-bots": "Exclude bots",
+  "contributionsleaderboard-limit": "Number of users to show",
+  "contributionsleaderboard-limit-10": "10 users",
+  "contributionsleaderboard-limit-25": "25 users",
+  "contributionsleaderboard-limit-50": "50 users",
+  "contributionsleaderboard-limit-100": "100 users",
+  "contributionsleaderboard-timeframe": "Time frame",
+  "contributionsleaderboard-timeframe-all": "All time",
+  "contributionsleaderboard-timeframe-month": "Last 30 days",
+  "contributionsleaderboard-timeframe-year": "Last 365 days",
+  "contributionsleaderboard-submit": "Apply filters",
+  "contributionsleaderboard-filters": "Filters",
+  "contributionsleaderboard-rank": "Rank",
+  "contributionsleaderboard-username": "Username",
+  "contributionsleaderboard-editcount": "Edit Count",
+  "contributionsleaderboard-no-results": "No results found.",
+  "contributionsleaderboard-prev": "← Previous",
+  "contributionsleaderboard-next": "Next →",
+  "contributionsleaderboard-database-error": "There was an error retrieving data from the database."
+}

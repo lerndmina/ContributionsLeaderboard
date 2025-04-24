@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * ContributionsLeaderboard Extension
+ *
+ * @file
+ * @ingroup Extensions
+ * @author Lerndmina
+ * @license GPL-2.0-or-later
+ */
+
+if (!defined('MEDIAWIKI')) {
+  die('This file is a MediaWiki extension and is not a valid entry point');
+}
+
+// Extension credits
+$wgExtensionCredits['specialpage'][] = [
+  'path' => __FILE__,
+  'name' => 'ContributionsLeaderboard',
+  'author' => 'YourName',
+  'url' => 'https://www.mediawiki.org/wiki/Extension:ContributionsLeaderboard',
+  'descriptionmsg' => 'contributionsleaderboard-desc',
+  'version' => '1.0.0',
+  'license-name' => 'GPL-2.0-or-later',
+];
+
+// Register files
+$wgAutoloadClasses['SpecialContributionsLeaderboard'] = __DIR__ .
+  '/includes/SpecialContributionsLeaderboard.php';
+$wgMessagesDirs['ContributionsLeaderboard'] = __DIR__ . '/i18n';
+$wgExtensionMessagesFiles['ContributionsLeaderboardAlias'] = __DIR__ .
+  '/ContributionsLeaderboard.alias.php';
+
+// Register special page
+$wgSpecialPages['ContributionsLeaderboard'] = 'SpecialContributionsLeaderboard';
+
+// Register hooks
+$wgHooks['LoadExtensionSchemaUpdates'][] = 'onLoadExtensionSchemaUpdates';
+
+// Register resources
+$wgResourceModules['ext.contributionsLeaderboard'] = [
+  'styles' => 'resources/ext.contributionsLeaderboard.css',
+  'localBasePath' => __DIR__,
+  'remoteExtPath' => 'ContributionsLeaderboard',
+];
+
+/**
+ * Schema updates for the extension
+ *
+ * @param DatabaseUpdater $updater
+ * @return bool
+ */
+function onLoadExtensionSchemaUpdates(DatabaseUpdater $updater)
+{
+  // No database changes needed for this extension
+  return true;
+}
