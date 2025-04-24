@@ -29,5 +29,5 @@
   "contributionsleaderboard-next": "Next →",
   "contributionsleaderboard-database-error": "There was an error retrieving data from the database.",
   "contributionsleaderboard-scoring-heading": "How the Contribution Score works",
-  "contributionsleaderboard-scoring-explanation": "The contribution score is calculated using a weighted system that values different types of contributions:\n* Creating a new page: 10 points\n* Large edit (over 1000 bytes): 5 points\n* Medium edit (100-1000 bytes): 3 points\n* Small edit (under 100 bytes): 1 point\n* Uploading a file: 8 points\n\nAdditional multipliers are applied based on content type:\n* JavaScript and CSS edits: 1.3x\n* JSON edits: 1.2x\n* Wiki text edits: 1.0x\n* Plain text edits: 0.8x"
+  "contributionsleaderboard-scoring-explanation": "The contribution score is calculated using a weighted system that values different types of contributions:\n* Creating a new page: 10 points\n* Large edit (over 1000 bytes): 5 points\n* Medium edit (100-1000 bytes): 3 points\n* Small edit (under 100 bytes): 1 point\n\nAdditional multipliers are applied based on content type:\n* JavaScript and CSS edits: 1.3x\n* JSON edits: 1.2x\n* Wiki text edits: 1.0x\n* Plain text edits: 0.8x"
 }

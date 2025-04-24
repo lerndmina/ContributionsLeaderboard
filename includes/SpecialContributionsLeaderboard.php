@@ -17,7 +17,6 @@ class SpecialContributionsLeaderboard extends SpecialPage
   const SCORE_EDIT_SMALL = 1;      // Small edit (< 100 bytes)
   const SCORE_EDIT_MEDIUM = 3;     // Medium edit (100-1000 bytes)
   const SCORE_EDIT_LARGE = 5;      // Large edit (> 1000 bytes)
-  const SCORE_FILE_UPLOAD = 8;     // Uploading a file
   const SCORE_PAGE_PATROLLED = 2;  // Bonus for edits that were patrolled
   const SCORE_CONTENT_MODEL = [    // Different weights for different content types
     'wikitext' => 1.0,
@@ -49,44 +48,34 @@ class SpecialContributionsLeaderboard extends SpecialPage
     // Get parameters
     $limit = $request->getInt('limit', 25);
     $offset = $request->getInt('offset', 0);
-    $excludeBots = $request->getBool('excludeBots', true);
+    // Remove excludeBots as a parameter but keep it true by default
+    $excludeBots = true;
     $timeFrame = $request->getText('timeFrame', 'all');
-    $scoreMode = $request->getBool('scoreMode', false);
+    // Remove scoreMode as a parameter but keep it true by default
+    $scoreMode = true;
+    // Get showDebug from URL parameter without permission check
+    $showDebug = $request->getBool('showDebug', false);
 
     // Set title as plain text to avoid deprecation warnings
     $output->setPageTitle($this->msg('contributionsleaderboard-title')->text());
     $output->addWikiTextAsInterface($this->msg('contributionsleaderboard-intro')->text());
 
-    // Add filter form
-    $this->addFilterForm($excludeBots, $limit, $timeFrame, $scoreMode);
+    // Add filter form with simplified options
+    $this->addFilterForm($limit, $timeFrame);
 
     // Display the leaderboard
-    $this->displayLeaderboard($limit, $offset, $excludeBots, $timeFrame, $scoreMode);
+    $this->displayLeaderboard($limit, $offset, $excludeBots, $timeFrame, $scoreMode, $showDebug);
   }
 
   /**
    * Add filter form to the output
    *
-   * @param bool $excludeBots Whether to exclude bots
    * @param int $limit Number of users to show
    * @param string $timeFrame Time frame for contributions
-   * @param bool $scoreMode Whether to use weighted scoring instead of raw edit counts
    */
-  private function addFilterForm($excludeBots, $limit, $timeFrame, $scoreMode)
+  private function addFilterForm($limit, $timeFrame)
   {
     $formDescriptor = [
-      'excludeBots' => [
-        'type' => 'check',
-        'name' => 'excludeBots',
-        'default' => $excludeBots,
-        'label-message' => 'contributionsleaderboard-exclude-bots',
-      ],
-      'scoreMode' => [
-        'type' => 'check',
-        'name' => 'scoreMode',
-        'default' => $scoreMode,
-        'label-message' => 'contributionsleaderboard-use-scoring',
-      ],
       'limit' => [
         'type' => 'select',
         'name' => 'limit',
@@ -128,8 +117,9 @@ class SpecialContributionsLeaderboard extends SpecialPage
    * @param bool $excludeBots Whether to exclude bots
    * @param string $timeFrame Time frame for contributions
    * @param bool $scoreMode Whether to use weighted scoring instead of raw edit counts
+   * @param bool $showDebug Whether to show debug information
    */
-  private function displayLeaderboard($limit, $offset, $excludeBots, $timeFrame, $scoreMode)
+  private function displayLeaderboard($limit, $offset, $excludeBots, $timeFrame, $scoreMode, $showDebug)
   {
     try {
       // Get database service using method available in latest MediaWiki
@@ -146,7 +136,7 @@ class SpecialContributionsLeaderboard extends SpecialPage
 
       if ($scoreMode) {
         // Always use the detailed query for score mode
-        $this->displayScoredLeaderboard($dbr, $limit, $offset, $excludeBots, $timeFrame);
+        $this->displayScoredLeaderboard($dbr, $limit, $offset, $excludeBots, $timeFrame, $showDebug);
       } else if ($timeFrame === 'all' && !$scoreMode) {
         // For 'all time' plain mode, use the simple user table query
         $this->displayUserTableLeaderboard($dbr, $limit, $offset, $excludeBots);
@@ -296,8 +286,9 @@ class SpecialContributionsLeaderboard extends SpecialPage
    * @param int $offset Offset for pagination
    * @param bool $excludeBots Whether to exclude bots
    * @param string $timeFrame Time frame for contributions
+   * @param bool $showDebug Whether to show debug information
    */
-  private function displayScoredLeaderboard($dbr, $limit, $offset, $excludeBots, $timeFrame)
+  private function displayScoredLeaderboard($dbr, $limit, $offset, $excludeBots, $timeFrame, $showDebug)
   {
     // DEBUG: Add visible feedback to help diagnose issues
     $debug = "<div style='border:1px solid #ccc; padding:10px; margin:10px 0; background:#f8f9fa;'>";
@@ -380,16 +371,20 @@ class SpecialContributionsLeaderboard extends SpecialPage
       $debug .= "</div>";
 
       // Show debug info
-      $this->getOutput()->addHTML($debug);
+      if ($showDebug) {
+        $this->getOutput()->addHTML($debug);
+      }
 
       // Render the results
-      $this->renderResults($res, $offset, $limit, $excludeBots, $timeFrame, true);
+      $this->renderResults($res, $offset, $limit, $excludeBots, $timeFrame, true, $showDebug);
     } catch (Exception $e) {
       $debug .= "<p>EXCEPTION: " . htmlspecialchars($e->getMessage()) . "</p>";
       $debug .= "<p>Stack trace: <pre>" . htmlspecialchars($e->getTraceAsString()) . "</pre></p>";
       $debug .= "</div>";
 
-      $this->getOutput()->addHTML($debug);
+      if ($showDebug) {
+        $this->getOutput()->addHTML($debug);
+      }
       $this->getOutput()->addHTML('<div class="error">' .
         $this->msg('contributionsleaderboard-database-error')->text() .
         ' (' . htmlspecialchars($e->getMessage()) . ')</div>');
@@ -411,38 +406,98 @@ class SpecialContributionsLeaderboard extends SpecialPage
     }
 
     $scores = [];
+    $scoreDetails = []; // Store detailed breakdown of scores for debugging
 
     try {
       // Get base edit counts from the user table
       $res = $dbr->select(
         'user',
-        ['user_id', 'user_editcount'],
+        ['user_id', 'user_name', 'user_editcount'],
         ['user_id' => $userIds],
         __METHOD__
       );
 
       foreach ($res as $row) {
         // Start with the edit count as a base score
-        $scores[$row->user_id] = $row->user_editcount ?? 0;
+        $baseEditCount = $row->user_editcount ?? 0;
+        $scores[$row->user_id] = $baseEditCount;
+
+        // Store details for debugging
+        $scoreDetails[$row->user_id] = [
+          'user_name' => $row->user_name,
+          'base_edit_count' => $baseEditCount,
+          'components' => [
+            'raw_edit_count' => $baseEditCount,
+          ],
+          'calculation_steps' => ["Starting with base edit count: $baseEditCount"],
+        ];
       }
 
-      // If we're using a time frame other than "all", try to adjust scores based on revisions
-      if ($timeFrame !== 'all') {
-        try {
-          // Add a random factor to make it look like a score rather than just edit count
-          // In reality we're just using a very simple formula based on edit count
-          foreach ($scores as $userId => $score) {
-            $scores[$userId] = round($score * (1 + (rand(-10, 20) / 100)), 1);
+      // Add wiki contributions - pages created
+      try {
+        // Get all revisions where rev_parent_id = 0 (indicates a new page creation)
+        $tables = ['revision', 'actor'];
+        $fields = [
+          'user_id' => 'actor.actor_user',
+          'count' => 'COUNT(*)'
+        ];
+        $conds = [
+          'actor.actor_user' => $userIds,
+          'revision.rev_parent_id' => 0, // New page creation
+        ];
+        $options = [
+          'GROUP BY' => 'actor.actor_user',
+        ];
+        $join_conds = [
+          'actor' => ['INNER JOIN', 'revision.rev_actor = actor.actor_id'],
+        ];
+
+        // Add time frame condition
+        if ($timeFrame !== 'all') {
+          if ($timeFrame === 'month') {
+            $timestamp = $dbr->timestamp(time() - 30 * 24 * 60 * 60);
+          } elseif ($timeFrame === 'year') {
+            $timestamp = $dbr->timestamp(time() - 365 * 24 * 60 * 60);
           }
-        } catch (Exception $e) {
-          // If time-based adjustment fails, we already have basic scores from user table
+
+          $conds[] = 'revision.rev_timestamp >= ' . $dbr->addQuotes($timestamp);
         }
-      } else {
-        // Add a random factor for "all" time view too
-        foreach ($scores as $userId => $score) {
-          $scores[$userId] = round($score * (1 + (rand(-10, 20) / 100)), 1);
+
+        $pageCreationRes = $dbr->select(
+          $tables,
+          $fields,
+          $conds,
+          __METHOD__,
+          $options,
+          $join_conds
+        );
+
+        foreach ($pageCreationRes as $row) {
+          $pageCreationBonus = (int)$row->count * self::SCORE_NEW_PAGE;
+          $scores[$row->user_id] += $pageCreationBonus;
+
+          // Update details
+          $scoreDetails[$row->user_id]['components']['page_creation'] = $pageCreationBonus;
+          $scoreDetails[$row->user_id]['calculation_steps'][] = "Added " . $row->count . " new pages x " .
+            self::SCORE_NEW_PAGE . " points = " . $pageCreationBonus . " points";
+        }
+      } catch (Exception $e) {
+        // Page creation calculation failed, continue with other metrics
+      }
+
+      // Get revised totals and round to one decimal place
+      foreach ($scores as $userId => $score) {
+        $finalScore = round($score, 1);
+        $scores[$userId] = $finalScore;
+
+        if (isset($scoreDetails[$userId])) {
+          $scoreDetails[$userId]['final_score'] = $finalScore;
+          $scoreDetails[$userId]['calculation_steps'][] = "Final score: $finalScore";
         }
       }
+
+      // Store score details for debug display
+      $this->scoreDetails = $scoreDetails;
     } catch (Exception $e) {
       // Log error but return empty array
       return [];
@@ -607,13 +662,6 @@ class SpecialContributionsLeaderboard extends SpecialPage
         // Add to user's score
         $scores[$row->user_id] += $score;
       }
-
-      // Add file upload scores - make this a separate try/catch
-      try {
-        $this->addFileUploadScores($dbr, $scores, $userIds, $timeFrame);
-      } catch (Exception $e) {
-        // If file upload scoring fails, just continue with existing scores
-      }
     } catch (Exception $e) {
       // If scoring calculation fails, use a fallback based on edit counts
       $res = $dbr->select(
@@ -630,129 +678,6 @@ class SpecialContributionsLeaderboard extends SpecialPage
     }
 
     return $scores;
-  }
-
-  /**
-   * Add file upload scores to the contribution scores
-   *
-   * @param IDatabase $dbr Database connection
-   * @param array &$scores Reference to scores array to update
-   * @param array $userIds Array of user IDs
-   * @param string $timeFrame Time frame for contributions
-   */
-  private function addFileUploadScores($dbr, &$scores, $userIds, $timeFrame)
-  {
-    if (empty($userIds)) {
-      return;
-    }
-
-    // First check if required tables and columns exist
-    $hasImgActor = true;
-    try {
-      // Test if the img_actor column exists
-      $test = $dbr->selectField('image', 'img_actor', [], __METHOD__, ['LIMIT' => 1]);
-    } catch (Exception $e) {
-      $hasImgActor = false;
-    }
-
-    if (!$hasImgActor) {
-      // For older MediaWiki versions, use img_user instead
-      try {
-        $tables = ['image'];
-        $fields = [
-          'user_id' => 'image.img_user',
-          'count' => 'COUNT(*)',
-        ];
-
-        $conds = [
-          'image.img_user' => $userIds,
-        ];
-
-        $options = [
-          'GROUP BY' => 'image.img_user',
-        ];
-
-        $join_conds = [];
-
-        // Add time frame condition
-        if ($timeFrame !== 'all') {
-          if ($timeFrame === 'month') {
-            $timestamp = $dbr->timestamp(time() - 30 * 24 * 60 * 60);
-          } elseif ($timeFrame === 'year') {
-            $timestamp = $dbr->timestamp(time() - 365 * 24 * 60 * 60);
-          }
-
-          $conds[] = 'image.img_timestamp >= ' . $dbr->addQuotes($timestamp);
-        }
-
-        // Query for file uploads with old schema
-        $res = $dbr->select(
-          $tables,
-          $fields,
-          $conds,
-          __METHOD__,
-          $options,
-          $join_conds
-        );
-
-        foreach ($res as $row) {
-          $scores[$row->user_id] += (int)$row->count * self::SCORE_FILE_UPLOAD;
-        }
-
-        return;
-      } catch (Exception $e) {
-        // If old schema fails too, just return without adding file upload scores
-        return;
-      }
-    }
-
-    // Modern schema with actor table
-    try {
-      $tables = ['image', 'actor'];
-      $fields = [
-        'user_id' => 'actor.actor_user',
-        'count' => 'COUNT(*)',
-      ];
-
-      $conds = [
-        'actor.actor_user' => $userIds,
-      ];
-
-      $options = [
-        'GROUP BY' => 'actor.actor_user',
-      ];
-
-      $join_conds = [
-        'actor' => ['INNER JOIN', 'image.img_actor = actor.actor_id'],
-      ];
-
-      // Add time frame condition
-      if ($timeFrame !== 'all') {
-        if ($timeFrame === 'month') {
-          $timestamp = $dbr->timestamp(time() - 30 * 24 * 60 * 60);
-        } elseif ($timeFrame === 'year') {
-          $timestamp = $dbr->timestamp(time() - 365 * 24 * 60 * 60);
-        }
-
-        $conds[] = 'image.img_timestamp >= ' . $dbr->addQuotes($timestamp);
-      }
-
-      // Query for file uploads
-      $res = $dbr->select(
-        $tables,
-        $fields,
-        $conds,
-        __METHOD__,
-        $options,
-        $join_conds
-      );
-
-      foreach ($res as $row) {
-        $scores[$row->user_id] += (int)$row->count * self::SCORE_FILE_UPLOAD;
-      }
-    } catch (Exception $e) {
-      // If this fails, silently continue - file uploads will just not be counted
-    }
   }
 
   /**
@@ -869,39 +794,50 @@ class SpecialContributionsLeaderboard extends SpecialPage
    * @param bool $excludeBots Whether to exclude bots
    * @param string $timeFrame Time frame for contributions
    * @param bool $scoreMode Whether results are from score mode
+   * @param bool $showDebug Whether to show debug information
    */
-  private function renderResults($res, $offset, $limit, $excludeBots, $timeFrame, $scoreMode = false)
+  private function renderResults($res, $offset, $limit, $excludeBots, $timeFrame, $scoreMode = false, $showDebug = false)
   {
-    // Add debugging to see what's in the result set
-    $resultDebug = "<div style='border:1px solid #ddd; padding:10px; margin:10px 0; background:#f0f0f0;'>";
-    $resultDebug .= "<h4>Results Debug</h4>";
+    // Only show result debug if debug mode is enabled
+    if ($showDebug) {
+      $resultDebug = "<div style='border:1px solid #ddd; padding:10px; margin:10px 0; background:#f0f0f0;'>";
+      $resultDebug .= "<h4>Results Debug</h4>";
 
-    if ($res->numRows() === 0) {
-      $resultDebug .= "<p>Result set contains 0 rows</p></div>";
+      if ($res->numRows() === 0) {
+        $resultDebug .= "<p>Result set contains 0 rows</p></div>";
+        $this->getOutput()->addHTML($resultDebug);
+        $this->getOutput()->addWikiTextAsInterface(
+          $this->msg('contributionsleaderboard-no-results')->text()
+        );
+        return;
+      }
+
+      // Check the content of the first row to debug
+      $res->rewind(); // Reset position to first row
+      $firstRow = $res->current();
+      $resultDebug .= "<p>First row data: ";
+      if ($firstRow) {
+        $resultDebug .= "user_id: " . htmlspecialchars($firstRow->user_id ?? 'N/A') . ", ";
+        $resultDebug .= "user_name: " . htmlspecialchars($firstRow->user_name ?? 'N/A') . ", ";
+        $resultDebug .= "edit_count: " . htmlspecialchars($firstRow->edit_count ?? 'N/A');
+      } else {
+        $resultDebug .= "No data in first row";
+      }
+      $resultDebug .= "</p></div>";
+
       $this->getOutput()->addHTML($resultDebug);
-      $this->getOutput()->addWikiTextAsInterface(
-        $this->msg('contributionsleaderboard-no-results')->text()
-      );
-      return;
-    }
 
-    // Check the content of the first row to debug
-    $res->rewind(); // Reset position to first row
-    $firstRow = $res->current();
-    $resultDebug .= "<p>First row data: ";
-    if ($firstRow) {
-      $resultDebug .= "user_id: " . htmlspecialchars($firstRow->user_id ?? 'N/A') . ", ";
-      $resultDebug .= "user_name: " . htmlspecialchars($firstRow->user_name ?? 'N/A') . ", ";
-      $resultDebug .= "edit_count: " . htmlspecialchars($firstRow->edit_count ?? 'N/A');
+      // Reset position again for rendering
+      $res->rewind();
     } else {
-      $resultDebug .= "No data in first row";
+      // If not in debug mode, but result set is empty, show no results message
+      if ($res->numRows() === 0) {
+        $this->getOutput()->addWikiTextAsInterface(
+          $this->msg('contributionsleaderboard-no-results')->text()
+        );
+        return;
+      }
     }
-    $resultDebug .= "</p></div>";
-
-    $this->getOutput()->addHTML($resultDebug);
-
-    // Reset position again for rendering
-    $res->rewind();
 
     // Build the table
     $html = Html::openElement('table', ['class' => 'wikitable sortable contributionsleaderboard']);
@@ -954,22 +890,46 @@ class SpecialContributionsLeaderboard extends SpecialPage
 
       $html .= Html::closeElement('tr');
 
+      // Add detailed score breakdown if debug is enabled and this is score mode
+      if ($showDebug && $scoreMode && isset($row->user_id) && isset($this->scoreDetails[$row->user_id])) {
+        $details = $this->scoreDetails[$row->user_id];
+        $html .= Html::openElement('tr', ['class' => 'score-details']);
+        $html .= Html::openElement('td', ['colspan' => '3', 'style' => 'background-color: #f8f8f8; padding: 10px; font-size: 0.9em;']);
+
+        $html .= '<h4>Score breakdown for ' . htmlspecialchars($row->user_name) . ':</h4>';
+        $html .= '<ul>';
+
+        // Show components
+        if (isset($details['components'])) {
+          foreach ($details['components'] as $component => $value) {
+            $html .= '<li><strong>' . htmlspecialchars(ucfirst(str_replace('_', ' ', $component))) .
+              ':</strong> ' . htmlspecialchars($value) . ' points</li>';
+          }
+        }
+
+        // Show calculation steps
+        if (isset($details['calculation_steps'])) {
+          $html .= '<li><strong>Calculation steps:</strong><ol>';
+          foreach ($details['calculation_steps'] as $step) {
+            $html .= '<li>' . htmlspecialchars($step) . '</li>';
+          }
+          $html .= '</ol></li>';
+        }
+
+        $html .= '</ul>';
+
+        $html .= Html::closeElement('td');
+        $html .= Html::closeElement('tr');
+      }
+
       $rank++;
     }
 
     $html .= Html::closeElement('tbody');
     $html .= Html::closeElement('table');
 
-    // If in score mode, add scoring explanation
-    if ($scoreMode) {
-      $html .= Html::openElement('div', ['class' => 'contributionsleaderboard-explanation']);
-      $html .= Html::element('h3', [], $this->msg('contributionsleaderboard-scoring-heading')->text());
-      $html .= $this->msg('contributionsleaderboard-scoring-explanation')->parse();
-      $html .= Html::closeElement('div');
-    }
-
     // Add pagination
-    $html .= $this->getPaginationLinks($limit, $offset, $excludeBots, $timeFrame, $scoreMode);
+    $html .= $this->getPaginationLinks($limit, $offset, $excludeBots, $timeFrame, $scoreMode, $showDebug);
 
     $this->getOutput()->addHTML($html);
   }
@@ -982,9 +942,10 @@ class SpecialContributionsLeaderboard extends SpecialPage
    * @param bool $excludeBots Whether to exclude bots
    * @param string $timeFrame Time frame for contributions
    * @param bool $scoreMode Whether to use weighted scoring instead of raw edit counts
+   * @param bool $showDebug Whether to show debug information
    * @return string HTML for pagination links
    */
-  private function getPaginationLinks($limit, $offset, $excludeBots, $timeFrame, $scoreMode = false)
+  private function getPaginationLinks($limit, $offset, $excludeBots, $timeFrame, $scoreMode = false, $showDebug = false)
   {
     $html = Html::openElement('div', ['class' => 'contributionsleaderboard-pagination']);
 
@@ -1000,6 +961,7 @@ class SpecialContributionsLeaderboard extends SpecialPage
             'excludeBots' => $excludeBots ? '1' : '0',
             'timeFrame' => $timeFrame,
             'scoreMode' => $scoreMode ? '1' : '0',
+            'showDebug' => $showDebug ? '1' : '0',
           ]),
           'class' => 'mw-prevlink',
         ],
@@ -1023,6 +985,7 @@ class SpecialContributionsLeaderboard extends SpecialPage
           'excludeBots' => $excludeBots ? '1' : '0',
           'timeFrame' => $timeFrame,
           'scoreMode' => $scoreMode ? '1' : '0',
+          'showDebug' => $showDebug ? '1' : '0',
         ]),
         'class' => 'mw-nextlink',
       ],
