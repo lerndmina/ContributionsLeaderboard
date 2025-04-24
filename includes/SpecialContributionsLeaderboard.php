@@ -162,6 +162,10 @@ class SpecialContributionsLeaderboard extends SpecialPage
    */
   private function displayUserTableLeaderboard($dbr, $limit, $offset, $excludeBots)
   {
+    // Get the actual table names with prefixes
+    $userTable = $dbr->tableName('user');
+    $userGroupsTable = $dbr->tableName('user_groups');
+
     $tables = ['user'];
     $fields = [
       'user_id',
@@ -181,14 +185,14 @@ class SpecialContributionsLeaderboard extends SpecialPage
     // Exclude bots if requested
     if ($excludeBots) {
       $tables[] = 'user_groups';
+
+      // Use fully qualified table names with prefixes
       $join_conds['user_groups'] = [
         'LEFT JOIN',
-        [
-          'user_groups.ug_user = user.user_id',
-          'user_groups.ug_group' => 'bot',
-        ],
+        "$userGroupsTable.ug_user = $userTable.user_id AND $userGroupsTable.ug_group = " . $dbr->addQuotes('bot')
       ];
-      $conds[] = 'user_groups.ug_user IS NULL';
+
+      $conds[] = "$userGroupsTable.ug_user IS NULL";
     }
 
     $res = $dbr->select(
@@ -214,12 +218,18 @@ class SpecialContributionsLeaderboard extends SpecialPage
    */
   private function displayRevisionBasedLeaderboard($dbr, $limit, $offset, $excludeBots, $timeFrame)
   {
+    // Get the actual table names with prefixes
+    $userTable = $dbr->tableName('user');
+    $userGroupsTable = $dbr->tableName('user_groups');
+    $revisionTable = $dbr->tableName('revision');
+    $actorTable = $dbr->tableName('actor');
+
     // Use a simplified query for time-based leaderboards
     $tables = ['revision', 'actor', 'user'];
     $fields = [
       'user_name' => 'user.user_name',
       'user_id' => 'user.user_id',
-      'edit_count' => 'COUNT(revision.rev_id)'
+      'edit_count' => "COUNT($revisionTable.rev_id)"
     ];
 
     $conds = [];
@@ -231,8 +241,8 @@ class SpecialContributionsLeaderboard extends SpecialPage
     ];
 
     $join_conds = [
-      'actor' => ['INNER JOIN', 'revision.rev_actor = actor.actor_id'],
-      'user' => ['INNER JOIN', 'actor.actor_user = user.user_id']
+      'actor' => ['INNER JOIN', "$revisionTable.rev_actor = $actorTable.actor_id"],
+      'user' => ['INNER JOIN', "$actorTable.actor_user = $userTable.user_id"]
     ];
 
     // Add time frame condition
@@ -246,21 +256,21 @@ class SpecialContributionsLeaderboard extends SpecialPage
       }
 
       if ($timestamp) {
-        $conds[] = 'revision.rev_timestamp >= ' . $dbr->addQuotes($timestamp);
+        $conds[] = "$revisionTable.rev_timestamp >= " . $dbr->addQuotes($timestamp);
       }
     }
 
     // Exclude bots if requested
     if ($excludeBots) {
       $tables[] = 'user_groups';
+
+      // Use fully qualified table names with prefixes
       $join_conds['user_groups'] = [
         'LEFT JOIN',
-        [
-          'user_groups.ug_user = user.user_id',
-          'user_groups.ug_group' => 'bot',
-        ],
+        "$userGroupsTable.ug_user = $userTable.user_id AND $userGroupsTable.ug_group = " . $dbr->addQuotes('bot')
       ];
-      $conds[] = 'user_groups.ug_user IS NULL';
+
+      $conds[] = "$userGroupsTable.ug_user IS NULL";
     }
 
     // Set a reasonable timeout to prevent server issues
@@ -405,6 +415,11 @@ class SpecialContributionsLeaderboard extends SpecialPage
       return [];
     }
 
+    // Get table names with prefixes
+    $userTable = $dbr->tableName('user');
+    $revisionTable = $dbr->tableName('revision');
+    $actorTable = $dbr->tableName('actor');
+
     $scores = [];
     $scoreDetails = []; // Store detailed breakdown of scores for debugging
 
@@ -438,18 +453,18 @@ class SpecialContributionsLeaderboard extends SpecialPage
         // Get all revisions where rev_parent_id = 0 (indicates a new page creation)
         $tables = ['revision', 'actor'];
         $fields = [
-          'user_id' => 'actor.actor_user',
+          'user_id' => "$actorTable.actor_user", // Use fully qualified name
           'count' => 'COUNT(*)'
         ];
         $conds = [
-          'actor.actor_user' => $userIds,
-          'revision.rev_parent_id' => 0, // New page creation
+          "$actorTable.actor_user" => $userIds, // Use fully qualified name
+          "$revisionTable.rev_parent_id" => 0, // New page creation
         ];
         $options = [
-          'GROUP BY' => 'actor.actor_user',
+          'GROUP BY' => "$actorTable.actor_user", // Use fully qualified name
         ];
         $join_conds = [
-          'actor' => ['INNER JOIN', 'revision.rev_actor = actor.actor_id'],
+          'actor' => ['INNER JOIN', "$revisionTable.rev_actor = $actorTable.actor_id"],
         ];
 
         // Add time frame condition
@@ -460,7 +475,7 @@ class SpecialContributionsLeaderboard extends SpecialPage
             $timestamp = $dbr->timestamp(time() - 365 * 24 * 60 * 60);
           }
 
-          $conds[] = 'revision.rev_timestamp >= ' . $dbr->addQuotes($timestamp);
+          $conds[] = "$revisionTable.rev_timestamp >= " . $dbr->addQuotes($timestamp);
         }
 
         $pageCreationRes = $dbr->select(
@@ -517,11 +532,15 @@ class SpecialContributionsLeaderboard extends SpecialPage
    */
   private function getUserIdsForScoring($dbr, $limit, $offset, $excludeBots)
   {
+    // Get the actual table names with prefixes
+    $userTable = $dbr->tableName('user');
+    $userGroupsTable = $dbr->tableName('user_groups');
+
     $tables = ['user'];
     $fields = ['user_id'];
     $conds = [];
     $options = [
-      'ORDER BY' => 'user_editcount DESC', // Pre-sort by edit count for efficiency
+      'ORDER BY' => 'user_editcount DESC',
       'LIMIT' => $limit,
       'OFFSET' => $offset
     ];
@@ -530,14 +549,14 @@ class SpecialContributionsLeaderboard extends SpecialPage
     // Exclude bots if requested
     if ($excludeBots) {
       $tables[] = 'user_groups';
+
+      // Use fully qualified table names with prefixes
       $join_conds['user_groups'] = [
         'LEFT JOIN',
-        [
-          'user_groups.ug_user = user.user_id',
-          'user_groups.ug_group' => 'bot',
-        ],
+        "$userGroupsTable.ug_user = $userTable.user_id AND $userGroupsTable.ug_group = " . $dbr->addQuotes('bot')
       ];
-      $conds[] = 'user_groups.ug_user IS NULL';
+
+      $conds[] = "$userGroupsTable.ug_user IS NULL";
     }
 
     $res = $dbr->select(
@@ -571,6 +590,12 @@ class SpecialContributionsLeaderboard extends SpecialPage
       return [];
     }
 
+    // Get table names with prefixes
+    $userTable = $dbr->tableName('user');
+    $revisionTable = $dbr->tableName('revision');
+    $actorTable = $dbr->tableName('actor');
+    $pageTable = $dbr->tableName('page');
+
     // Initialize scores to 0
     $scores = array_fill_keys($userIds, 0);
 
@@ -588,13 +613,13 @@ class SpecialContributionsLeaderboard extends SpecialPage
       $tables = ['revision', 'actor', 'page'];
       $fields = [
         'user_id' => 'actor.actor_user',
-        'rev_len' => 'revision.rev_len',
-        'rev_parent_id' => 'revision.rev_parent_id',
+        'rev_len' => "$revisionTable.rev_len",
+        'rev_parent_id' => "$revisionTable.rev_parent_id",
       ];
 
       // Add page content model if available
       if ($hasPageContentModel) {
-        $fields['page_content_model'] = 'page.page_content_model';
+        $fields['page_content_model'] = "$pageTable.page_content_model";
       }
 
       $conds = [
@@ -606,8 +631,8 @@ class SpecialContributionsLeaderboard extends SpecialPage
       ];
 
       $join_conds = [
-        'actor' => ['INNER JOIN', 'revision.rev_actor = actor.actor_id'],
-        'page' => ['INNER JOIN', 'revision.rev_page = page.page_id'],
+        'actor' => ['INNER JOIN', "$revisionTable.rev_actor = $actorTable.actor_id"],
+        'page' => ['INNER JOIN', "$revisionTable.rev_page = $pageTable.page_id"],
       ];
 
       // Add time frame condition
@@ -618,7 +643,7 @@ class SpecialContributionsLeaderboard extends SpecialPage
           $timestamp = $dbr->timestamp(time() - 365 * 24 * 60 * 60);
         }
 
-        $conds[] = 'revision.rev_timestamp >= ' . $dbr->addQuotes($timestamp);
+        $conds[] = "$revisionTable.rev_timestamp >= " . $dbr->addQuotes($timestamp);
       }
 
       // Execute query
@@ -692,6 +717,9 @@ class SpecialContributionsLeaderboard extends SpecialPage
     if (empty($userIds)) {
       return [];
     }
+
+    // Get proper table name with prefix
+    $userTable = $dbr->tableName('user');
 
     $res = $dbr->select(
       'user',
